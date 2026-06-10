@@ -1,8 +1,27 @@
+# ⚠️ Fork status (June 2026)
+
+This is a fork of the archived [aaddrick/claude-desktop-arch](https://github.com/aaddrick/claude-desktop-arch) repo, updated so the build still works — with one important caveat:
+
+**This PKGBUILD installs Claude Desktop 0.14.10 (October 2025) and can never install anything newer.** In February 2026 Anthropic switched the Windows installer from the Squirrel `.exe` format (which this build extracts) to MSIX, served from a Cloudflare-protected endpoint. The legacy download URL used here still works, but it is frozen at the last Squirrel build, 0.14.10. Supporting current 1.x versions would mean porting MSIX extraction, headless-browser download-URL resolution, and a newer patch set — essentially what [aaddrick/claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian) now does.
+
+**If you want a current, maintained Claude Desktop on Arch/EndeavourOS, use one of these instead:**
+
+* [`claude-desktop-native`](https://aur.archlinux.org/packages/claude-desktop-native) on the AUR ([upstream repo](https://github.com/jkoelker/claude-desktop-native)) — `yay -S claude-desktop-native`
+* [aaddrick/claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian) — actively maintained; its AppImage builds run fine on Arch-based distros
+
+Changes made in this fork relative to the archived upstream:
+
+* Pinned Electron to the 37.x line (Claude Desktop 0.14.10 targets Electron 37.6.0; unpinned "latest" has drifted several majors ahead).
+* Added an `AuthRequest` stub to the `claude-native` shim. 0.14.10 calls `AuthRequest.isAvailable()` during login; without the stub that check throws and browser-based login can fail.
+* Removed the title-bar fix downloaded from `emsi/claude-desktop` (`main_window.tgz`). It replaced the app's title-bar renderer with a snapshot built against an older app version, which no longer matches 0.14.10's main process. 0.14.10 ships its own title-bar renderer.
+* `LICENSE` is sourced from this repo instead of being downloaded from the archived upstream.
+* Switched from the deprecated `asar` npm package to `@electron/asar`.
+
+Also note: a 0.14.10 client is eight months old. It may still sign in and chat, but expect missing features and the possibility that Anthropic eventually blocks old clients.
+
+---
+
 **Debian/Ubuntu Linux users:** For the DPKG/AppImage build script and Debian-specific instructions: [https://github.com/aaddrick/claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian)
-
-**This repo isn't maintained actively. Please checkout the links below for alternatives**
-
-https://github.com/jkoelker/claude-desktop-native
 
 ***THIS IS AN UNOFFICIAL PKGBUILD FOR ARCH LINUX BASED SYSTEMS!***
 
@@ -28,7 +47,7 @@ For Arch Linux and Arch-based distributions, you can build and install using the
 
 ```bash
 # Clone this repository
-git clone https://github.com/aaddrick/claude-desktop-arch.git
+git clone https://github.com/jmbullis/claude-desktop-arch.git
 cd claude-desktop-arch
 
 # Update checksums (needed once, or after PKGBUILD/install script changes)
@@ -111,8 +130,7 @@ Claude Desktop is an Electron application packaged as a Windows executable. The 
     *   Extracts the application files from the embedded NuGet package (`.nupkg`).
     *   Extracts icons using `wrestool` and `icotool`.
     *   Unpacks the `app.asar` archive using the local `asar` tool.
-    *   Replaces the Windows-specific native module (`claude-native`) with a Linux-compatible JavaScript stub (in both `app.asar.contents` and `app.asar.unpacked`). This stub provides dummy functions for Windows APIs while keeping necessary parts like `KeyboardKey`.
-    *   Downloads and applies assets for the main window title bar fix from [emsi/claude-desktop](https://github.com/emsi/claude-desktop).
+    *   Replaces the Windows-specific native module (`claude-native`) with a Linux-compatible JavaScript stub (in both `app.asar.contents` and `app.asar.unpacked`). This stub provides dummy functions for Windows APIs while keeping necessary parts like `KeyboardKey`, plus an `AuthRequest` class whose `isAvailable()` returns `false` so login falls back to the system browser.
     *   Repacks the modified `app.asar`.
 4.  **Packaging (`package()`):**
     *   Installs the application files (`app.asar`, `app.asar.unpacked`) into `/usr/lib/claude-desktop/`.

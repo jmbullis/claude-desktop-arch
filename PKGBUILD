@@ -5,16 +5,21 @@ _pkgname=claude-desktop # Internal variable for the base package name
 pkgname=$_pkgname       # The actual package name displayed to the user
 # pkgver is now determined dynamically by the pkgver() function
 pkgrel=1                # Package release number, reset to 1 when pkgver changes
-pkgver=0.9.1
+pkgver=0.14.10
 pkgdesc="Claude Desktop for Linux – an AI assistant from Anthropic" # Package description
 arch=('x86_64' 'aarch64') # Supported architectures
-url="https://github.com/aaddrick/claude-desktop-arch" # Project URL (this repo)
+url="https://github.com/jmbullis/claude-desktop-arch" # Project URL (this repo)
 license=('Unlicense')   # Package license
 # electron is removed as it's now packaged locally
 depends=('nodejs' 'npm' 'p7zip' 'icoutils' 'imagemagick') # Runtime dependencies
 # npm is added for local electron/asar install
 makedepends=('wget' 'p7zip' 'npm') # Build-time dependencies
 install=$_pkgname.install # Script for post-install actions (sandbox permissions)
+# NOTE: In February 2026 Anthropic switched the Windows installer from the
+# Squirrel .exe format to MSIX, served from a Cloudflare-protected endpoint.
+# The legacy URLs below still work but are frozen at the last Squirrel build
+# (0.14.10, October 2025). Newer versions cannot be fetched this way; see the
+# README for maintained alternatives.
 # --- Source Files & Arch Detection ---
 # Define architecture-specific installer details
 if [[ "$CARCH" == "x86_64" ]]; then
@@ -32,7 +37,7 @@ fi
 
 # Define source files using the architecture-specific variables
 source=("$_installer_filename::$_installer_url"
-        "LICENSE::https://raw.githubusercontent.com/aaddrick/claude-desktop-arch/main/LICENSE"
+        "LICENSE"
         "$_pkgname.install")
 # --- Version Detection ---
 # This function automatically determines the latest version from the downloaded files.
@@ -105,7 +110,10 @@ build() {
   if [ ! -f "package.json" ]; then
       echo '{"name":"claude-desktop-build","version":"0.0.1","private":true}' > package.json
   fi
-  npm install --no-save electron asar || { echo "npm install failed"; exit 1; }
+  # Claude Desktop 0.14.10 targets Electron 37.6.0 (devDependencies in its
+  # package.json). Stay on the 37.x line; unpinned "latest" Electron has
+  # drifted several majors ahead and is untested with this app version.
+  npm install --no-save electron@^37.6.0 @electron/asar || { echo "npm install failed"; exit 1; }
   local _asar_exec="$(realpath ./node_modules/.bin/asar)"
   echo "✓ Using local asar: $_asar_exec"
 
@@ -185,6 +193,15 @@ build() {
     Meta: 187
   };
   Object.freeze(KeyboardKey); // Make the enum immutable
+  // Native auth window (ASWebAuth-style) is Windows-only. The app checks
+  // AuthRequest.isAvailable() before using it and falls back to opening the
+  // system browser when it returns false. Without this class the check
+  // throws and login breaks (added in Claude Desktop ~0.14.x).
+  class AuthRequest {
+    static isAvailable() { return false; }
+    start() { return Promise.reject(new Error("AuthRequest is not available on Linux")); }
+    cancel() {}
+  }
   // Export dummy functions matching the expected native module API
   module.exports = {
     getWindowsVersion: () => "10.0.0", // Return a plausible Windows version
@@ -198,6 +215,7 @@ build() {
     clearProgressBar: () => {},       // No-op for clearing taskbar progress
     setOverlayIcon: () => {},         // No-op for setting taskbar overlay icon
     clearOverlayIcon: () => {},       // No-op for clearing taskbar overlay icon
+    AuthRequest,                      // Stub auth window; isAvailable()=false triggers browser fallback
     KeyboardKey                       // Export the KeyboardKey enum
   };
 EOF
@@ -217,10 +235,12 @@ EOF
   mkdir -p app.asar.contents/resources/i18n
   cp ../lib/net45/resources/*-*.json app.asar.contents/resources/i18n/ || echo "Warning: Failed to copy i18n JSON files"
 
-  echo "Downloading Main Window Fix Assets"
-  cd app.asar.contents
-  wget -O- https://github.com/emsi/claude-desktop/raw/refs/heads/main/assets/main_window.tgz | tar -zxvf -
-  cd ..
+  # NOTE: Older revisions of this PKGBUILD overwrote .vite/renderer/main_window
+  # with a snapshot from emsi/claude-desktop (main_window.tgz) to fix the title
+  # bar. That snapshot was built against an older app version than 0.14.10 and
+  # its JS bundles no longer match this app's main process, so it is no longer
+  # applied. Claude Desktop 0.14.10 ships its own title-bar renderer, and the
+  # pinned Electron 37 supports the Window Controls Overlay on Linux.
 
   # Repack the modified contents back into the app.asar archive
   echo "Repacking asar..."
