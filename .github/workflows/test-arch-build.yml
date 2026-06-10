@@ -21,8 +21,9 @@ jobs:
     - name: Update pacman database and install dependencies
       run: |
         pacman -Syu --noconfirm
-        # Install build tools AND package dependencies (runtime + makedepends from PKGBUILD)
-        pacman -S --needed base-devel git nodejs npm electron p7zip icoutils imagemagick wget --noconfirm
+        # Install build tools AND package dependencies (runtime depends from PKGBUILD;
+        # the build itself only needs bsdtar, which ships with pacman/libarchive)
+        pacman -S --needed base-devel git alsa-lib desktop-file-utils gtk3 hicolor-icon-theme libnotify libxss libxtst nss xdg-utils --noconfirm
 
     - name: Set ownership for makepkg
       # makepkg cannot run as root, change ownership to a non-root user
